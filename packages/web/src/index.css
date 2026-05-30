@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@theme {
+  /* === OKLCH 明亮主题色 === */
+  --color-bg:         oklch(0.975 0.005 260);
+  --color-card:       oklch(0.995 0 0);
+  --color-hover:      oklch(0.95 0.008 260);
+  --color-border:     oklch(0.91 0.005 260);
+  --color-text:       oklch(0.20 0.015 260);
+  --color-text-dim:   oklch(0.55 0.01 260);
+  --color-accent:     oklch(0.55 0.20 260);
+  --color-accent-dim: oklch(0.60 0.16 260);
+  --color-success:    oklch(0.60 0.18 155);
+  --color-danger:     oklch(0.58 0.20 25);
+  --color-warning:    oklch(0.75 0.15 85);
+}
+
+/* === 全局基础 === */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* === 状态圆点 === */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot.connected    { background: var(--color-success); }
+.dot.disconnected { background: var(--color-text-dim); }
+.dot.error        { background: var(--color-danger); }
+.dot.connecting   { background: var(--color-warning); animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* === Timeline 时间线 === */
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+.timeline-step {
+  position: relative;
+  padding: 0.75rem 0 0.75rem 1.5rem;
+  cursor: pointer;
+}
+.timeline-step::before {
+  content: "";
+  position: absolute;
+  left: -1.65rem;
+  top: 1rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-card);
+  border: 2px solid var(--color-border);
+}
+.timeline-step.active::before {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+.timeline-step.error::before {
+  border-color: var(--color-danger);
+  background: var(--color-danger);
+}
+
+/* === 消息气泡内代码块 === */
+.message pre {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.5rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  font-size: 0.8rem;
+}
+.message.user pre {
+  background: rgba(255, 255, 255, 0.2);
+}

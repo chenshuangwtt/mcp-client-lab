@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp"
+      ],
+      "description": "本地文件系统 MCP Server（stdio）"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "http-server": {
+      "transport": "streamable-http",
+      "url": "http://localhost:8001/mcp",
+      "description": "Streamable HTTP MCP Server"
+    }
+  }
+}

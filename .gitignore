@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Local environment and MCP server config
+.env
+.env.*
+!.env.example
+mcp-servers.json
+
+# Build output
+build/
+dist/
+*.tsbuildinfo
+
+# Runtime logs and traces
+logs/
+logs2/
+traces/
+requests/
+*.log
+
+# Editors and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Keep the workspace on pnpm
+package-lock.json
+yarn.lock

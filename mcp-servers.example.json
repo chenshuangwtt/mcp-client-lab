@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp"
+      ],
+      "description": "本地文件系统 MCP Server（stdio）"
+    },
+    "demo-sse": {
+      "transport": "sse",
+      "url": "http://localhost:8000/sse",
+      "description": "通过 SSE 协议连接的 MCP 服务器"
+    }
+  },
+  "defaultServer": "filesystem",
+  "system": "可选：这里填写系统提示词"
+}
