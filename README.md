@@ -4,13 +4,16 @@
 
 ## 项目定位
 
-**mcp-client-lab** 不是生产级 Agent 框架，而是用于：
+**mcp-client-lab** 是一个 MCP Client 学习与调试工具，核心能力：
 
-- **学习** MCP Client 工作原理
-- **调试** MCP Server 的工具调用
-- **可视化** 观察一次 MCP 工具调用的完整链路
+- **可视化** MCP 工具调用全链路：tools/list → LLM 工具选择 → tools/call → 结果回传 → 最终回答
+- **支持三种 Transport**：stdio、SSE、Streamable HTTP
+- **多 Server 联调**：同时连接多个 MCP Server，自由选择本次参与的 Server
+- **Trace 回放**：每步操作自动记录，支持 Mermaid 时序图 + 时间线展开
 
-核心价值：**把 tools/list → LLM 工具选择 → tools/call → 结果回传 → 最终回答的全过程用 Web 页面展示出来。**
+适合 MCP 协议学习、Server 开发调试、工具调用链路分析。
+![架构图](images/tech.png)
+
 
 ## 支持三种 Transport
 
@@ -91,13 +94,34 @@ pnpm dev:server -- --config ./custom.json
 
 ## Web UI
 
+当前版本专注 Web Lab 模式，所有 MCP Server 通过 `mcp-servers.json` 配置。
+
 浏览器打开 `http://localhost:5173`：
 
 - **Chat** — 输入问题，观察工具调用链路，支持 Markdown 渲染
-  - 左侧可勾选本次参与对话的 MCP Server，只把选中 Server 的工具交给 LLM
-  - 危险工具触发确认：确认后继续执行，取消后 Trace 立即记录 UserCancelled
-- **Servers** — 查看连接状态、工具列表，重载配置
-- **Traces** — 查看每次请求的完整时间线，按轮次分组，支持删除
+  - 左侧可勾选本次参与对话的 MCP Server，只有选中且 connected 的 Server 工具会传给 LLM
+  - 点击 `↻` 按钮可刷新 Server 状态
+  - 未选择任何 Server 时发送消息，前端会提示，不会请求后端
+  - 危险工具触发确认：确认后继续执行，取消后后端 Trace 立即结束并记录 UserCancelled
+
+![Chat 页面](images/chat-page.png)
+
+![危险工具确认](images/confirm-page.png)
+
+- **Servers** — 查看连接状态、工具列表，重载配置（使用启动时传入的 config 路径）
+
+![Servers 页面](images/servers-page.png)
+
+- **Traces** — 查看每次请求的完整调用链路
+  - 自动生成 Mermaid 时序图，直观展示 User → LLM → MCP Server 的交互流程
+  - 时间线按轮次分组，点击展开查看详情
+  - 最终回答支持 Markdown 渲染（表格、粗体、代码等）
+  - UserCancelled 显示为「🚫 已取消」，普通失败显示「❌ 失败」
+  - 支持删除 Trace
+
+![Trace 列表](images/trace-page.png)
+
+![Trace 详情](images/trace-detail.png)
 
 ## 内置 Demo Server 工具
 
@@ -136,6 +160,10 @@ pnpm dev:server -- --config ./custom.json
 ```
 
 每一步都记录在 Trace 中，可在 Trace 页面展开查看详情。
+
+![工作时序图](images/flow.png)
+
+
 
 ## 危险工具确认
 
@@ -189,15 +217,15 @@ logs/
 
 ## 安全配置
 
-可选环境变量（在 `.env` 中设置）：
+可选环境变量（在 `.env` 中设置），不设置则无鉴权，适合 localhost 本地学习：
 
 | 变量 | 说明 |
 |------|------|
-| `WEB_ORIGIN` | CORS 允许的来源，不设置则允许所有 |
-| `LAB_TOKEN` | API 访问令牌，设置后危险接口需要 `Authorization: Bearer <token>` |
-| `VITE_LAB_TOKEN` | 前端令牌，配合 `LAB_TOKEN` 使用，前端自动携带 |
+| `WEB_ORIGIN` | 可限制 CORS 来源，如 `http://localhost:5173` |
+| `LAB_TOKEN` | 设置后会保护 POST/DELETE 危险接口，需 `Authorization: Bearer <token>` |
+| `VITE_LAB_TOKEN` | 前端令牌，需和 `LAB_TOKEN` 一致，前端请求自动携带 |
 
-需要 Token 验证的接口：`POST /api/chat`、`POST /api/servers/reload`、`POST /api/servers/:name/connect|disconnect|tools/refresh`、`DELETE /api/traces/:traceId`
+受保护的接口：`POST /api/chat`、`POST /api/chat/cancel-confirmation`、`POST /api/servers/reload`、`POST /api/servers/:name/connect|disconnect|tools/refresh`、`DELETE /api/traces/:traceId`
 
 ## 项目结构
 

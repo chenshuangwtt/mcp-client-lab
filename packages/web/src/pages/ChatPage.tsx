@@ -62,16 +62,7 @@ export default function ChatPage() {
   const [selectedServers, setSelectedServers] = useState<Set<string>>(new Set());
   const messagesEnd = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    api.getServers().then((r) => {
-      setServers(r.servers);
-      // 首次加载时自动选中已连接的 server
-      setSelectedServers((prev) => {
-        if (prev.size > 0) return prev;
-        return new Set(r.servers.filter((s) => s.state === "connected").map((s) => s.name));
-      });
-    }).catch(() => {});
-  }, []);
+  useEffect(() => { refreshServers(); }, []);
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => { saveMessages(messages); }, [messages]);
 
@@ -79,8 +70,29 @@ export default function ChatPage() {
   const selectedServerList = servers.filter((s) => selectedServers.has(s.name) && s.state === "connected");
   const selectedTools = selectedServerList.reduce((sum, s) => sum + s.tools.length, 0);
 
+  /** 刷新 Server 状态并同步选中 */
+  async function refreshServers() {
+    const r = await api.getServers();
+    setServers(r.servers);
+    const connectedNames = new Set(r.servers.filter((s) => s.state === "connected").map((s) => s.name));
+    setSelectedServers((prev) => {
+      const next = new Set([...prev].filter((name) => connectedNames.has(name)));
+      if (next.size === 0) {
+        for (const name of connectedNames) next.add(name);
+      }
+      return next;
+    });
+  }
+
   async function handleSend(confirm?: { traceId: string; toolName: string; arguments: Record<string, unknown> }) {
     if (!input.trim() && !confirm) return;
+
+    // 非 confirm 模式下校验至少选中一个 Server
+    if (!confirm && selectedTools === 0) {
+      setMessages((prev) => [...prev, { role: "error", content: "请至少选择一个已连接的 MCP Server，或确认当前问题不需要工具。" }]);
+      return;
+    }
+
     const userMsg = confirm ? "" : input.trim();
 
     if (!confirm) {
@@ -128,10 +140,17 @@ export default function ChatPage() {
     } else if (confirmInfo) {
       try {
         await api.cancelConfirmation(confirmInfo.traceId);
-      } catch { /* 忽略取消失败 */ }
-      setConfirmInfo(null);
-      setMessages((prev) => [...prev, { role: "assistant", content: "🚫 已取消危险工具调用。" }]);
-      setCurrentSteps(["cancelled"]);
+        setConfirmInfo(null);
+        setMessages((prev) => [...prev, { role: "assistant", content: "🚫 已取消危险工具调用。" }]);
+        setCurrentSteps(["cancelled"]);
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "error", content: `取消失败: ${err instanceof Error ? err.message : String(err)}` },
+        ]);
+        setCurrentSteps(["error"]);
+        // 不清空 confirmInfo，用户可以再次选择
+      }
     }
   }
 
@@ -139,7 +158,16 @@ export default function ChatPage() {
     <div className="grid grid-cols-[260px_1fr_280px] gap-4 h-[calc(100vh-80px)]">
       {/* 左侧面板：Server 列表 */}
       <div className="bg-card border border-border rounded-xl p-4 overflow-y-auto">
-        <div className="text-xs font-semibold text-text-dim uppercase tracking-wide mb-3">MCP Servers</div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-semibold text-text-dim uppercase tracking-wide">MCP Servers</div>
+          <button
+            onClick={() => refreshServers().catch(() => {})}
+            className="text-xs text-text-dim hover:text-accent cursor-pointer px-1"
+            title="刷新状态"
+          >
+            ↻
+          </button>
+        </div>
         {servers.map((s) => (
           <div key={s.name} className={`flex items-center gap-2 p-2 rounded-md text-sm transition-colors ${s.state === "connected" ? "hover:bg-hover cursor-pointer" : "opacity-50"}`}>
             <input

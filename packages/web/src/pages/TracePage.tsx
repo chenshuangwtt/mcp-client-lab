@@ -1,9 +1,114 @@
 import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import mermaid from "mermaid";
 import { api, TraceData } from "../api/index.js";
+
+/** 修复 LLM 生成的单行表格 → 标准 Markdown 多行表格 */
+function fixInlineTables(text: string): string {
+  return text.replace(/^(\|.+?\|)\s*$/gm, (line) => {
+    if (line.includes("\n")) return line;
+    const raw = line.split("|");
+    const cells = raw.slice(1, -1).map((c) => c.trim());
+    if (cells.length < 3) return line;
+    const sepIdx = cells.findIndex((c) => /^[-:\s]+$/.test(c) && c.includes("-"));
+    if (sepIdx <= 0) return line;
+    const cols = sepIdx;
+    const rows: string[] = [];
+    rows.push("| " + cells.slice(0, cols).join(" | ") + " |");
+    rows.push("|" + cells.slice(cols, cols * 2).map((c) => ` ${c} `).join("|") + "|");
+    for (let i = cols * 2; i < cells.length; i += cols) {
+      rows.push("| " + cells.slice(i, i + cols).join(" | ") + " |");
+    }
+    return rows.join("\n");
+  });
+}
+
+let mermaidCounter = 0;
+mermaid.initialize({ startOnLoad: false, theme: "base", themeVariables: { fontSize: "13px" }, securityLevel: "loose" });
+
+/** 从 Trace 步骤生成 Mermaid 时序图 */
+function generateSequenceDiagram(trace: TraceData): string {
+  const lines: string[] = [
+    "sequenceDiagram",
+    "    participant U as User",
+    "    participant L as LLM",
+    "    participant M as MCP Server",
+  ];
+  const d = (step: any): Record<string, unknown> => step.data ?? step;
+  let prevRound = -1;
+
+  for (const step of trace.steps) {
+    const round = (step as any).round ?? 0;
+    if (round > prevRound && round > 0) {
+      lines.push(`    Note over U,M: 第 ${round + 1} 轮`);
+      prevRound = round;
+    }
+    const s = d(step);
+
+    switch (step.type) {
+      case "user_message":
+        lines.push(`    U->>L: ${String(s.content).slice(0, 50).replace(/[\n\r]/g, " ")}`);
+        break;
+      case "llm_tool_decision":
+        if (s.invoked) {
+          lines.push(`    L->>L: 决策调用 ${s.toolName}`);
+        }
+        break;
+      case "mcp_tool_call":
+        lines.push(`    L->>M: ${s.toolName}()`);
+        break;
+      case "mcp_tool_result":
+        lines.push(`    M-->>L: 返回结果`);
+        break;
+      case "final_answer":
+        lines.push(`    L-->>U: ${String(s.content).slice(0, 50).replace(/[\n\r]/g, " ")}`);
+        break;
+      case "error":
+        lines.push(`    Note over U,M: Error - ${String(s.message).slice(0, 40).replace(/[\n\r]/g, " ")}`);
+        break;
+    }
+  }
+  return lines.join("\n");
+}
+
+/** Mermaid 渲染组件 */
+function MermaidDiagram({ code }: { code: string }) {
+  const [svg, setSvg] = useState("");
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const renderId = `mermaid-diagram-${mermaidCounter++}`;
+    mermaid
+      .render(renderId, code)
+      .then((result) => { setSvg(result.svg); setError(false); })
+      .catch(() => { setError(true); });
+  }, [code]);
+
+  if (error || !svg) return null;
+  return <div className="overflow-x-auto my-4 p-4 bg-card border border-border rounded-xl" dangerouslySetInnerHTML={{ __html: svg }} />;
+}
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("zh-CN");
+}
+
+function MarkdownAnswer({ content }: { content: string }) {
+  return (
+    <div className="text-sm leading-relaxed markdown-body">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {fixInlineTables(content)}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+function isUserCancelled(trace: TraceData): boolean {
+  const last = trace.steps[trace.steps.length - 1];
+  if (!last) return false;
+  const d: Record<string, unknown> = (last as any).data ?? last;
+  return last.type === "error" && d.type === "UserCancelled";
 }
 
 function stepTitle(type: string): string {
@@ -27,16 +132,18 @@ function StepBody({ step }: { step: any }) {
   // 兼容新旧格式：新格式 step.data 存业务字段，旧格式直接在 step 上
   const d: Record<string, unknown> = step.data ?? step;
   const isError = step.type === "error";
+  const alwaysShow = step.type === "user_message" || step.type === "final_answer";
 
   return (
-    <div className={`timeline-step ${isError ? "error" : "active"}`} onClick={() => setExpanded(!expanded)}>
-      <div className="flex items-center gap-2">
+    <div className={`timeline-step ${isError ? "error" : "active"}`}>
+      <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setExpanded(!expanded)}>
         <span className="font-semibold text-xs uppercase tracking-wide text-accent">
           {stepTitle(step.type)}
         </span>
         <span className="text-xs text-text-dim">{formatTime(step.timestamp)}</span>
+        {!alwaysShow && <span className="text-xs text-text-dim ml-auto">{expanded ? "收起" : "展开"}</span>}
       </div>
-      {expanded && (
+      {(expanded || alwaysShow) && (
         <div className="mt-2 text-sm bg-bg p-3 rounded-md overflow-x-auto">
           {step.type === "user_message" && <p>{d.content as string}</p>}
 
@@ -77,7 +184,9 @@ function StepBody({ step }: { step: any }) {
             <pre className="text-xs">{JSON.stringify(d, null, 2)}</pre>
           )}
 
-          {step.type === "final_answer" && <pre className="text-xs whitespace-pre-wrap">{d.content as string}</pre>}
+          {step.type === "final_answer" && (
+            <MarkdownAnswer content={(d.content as string) || ""} />
+          )}
 
           {step.type === "error" && (
             <div className="text-danger">
@@ -156,8 +265,8 @@ export default function TracePage() {
                 <div className="flex gap-3 mt-1 text-xs text-text-dim">
                   <span>{new Date(t.startedAt).toLocaleString("zh-CN")}</span>
                   <span>{t.steps.length} 步</span>
-                  <span className={t.status === "success" ? "text-success" : "text-danger"}>
-                    {t.status === "success" ? "✅ 成功" : t.status === "error" ? "❌ 失败" : "⏳ 运行中"}
+                  <span className={t.status === "success" ? "text-success" : t.status === "error" && isUserCancelled(t) ? "text-warning" : "text-danger"}>
+                    {t.status === "success" ? "✅ 成功" : t.status === "error" && isUserCancelled(t) ? "🚫 已取消" : t.status === "error" ? "❌ 失败" : "⏳ 运行中"}
                   </span>
                 </div>
               </Link>
@@ -195,20 +304,16 @@ export default function TracePage() {
           <span>ID: {trace.traceId.slice(0, 8)}...</span>
           <span>{new Date(trace.startedAt).toLocaleString("zh-CN")}</span>
           <span>{trace.steps.length} 步</span>
-          <span className={trace.status === "success" ? "text-success" : "text-danger"}>
-            {trace.status === "success" ? "✅ 成功" : trace.status === "error" ? "❌ 失败" : "⏳ 运行中"}
+          <span className={trace.status === "success" ? "text-success" : trace.status === "error" && isUserCancelled(trace) ? "text-warning" : "text-danger"}>
+            {trace.status === "success" ? "✅ 成功" : trace.status === "error" && isUserCancelled(trace) ? "🚫 已取消" : trace.status === "error" ? "❌ 失败" : "⏳ 运行中"}
           </span>
         </div>
         <div className="mt-2 text-sm">
           <strong>问题:</strong> {trace.userMessage}
         </div>
-        {trace.finalAnswer && (
-          <div className="mt-2 p-3 bg-bg rounded-lg">
-            <strong className="text-sm">回答:</strong>
-            <p className="mt-1 text-sm whitespace-pre-wrap">{trace.finalAnswer}</p>
-          </div>
-        )}
       </div>
+
+      <MermaidDiagram code={generateSequenceDiagram(trace)} />
 
       <div className="timeline">
         {trace.steps.map((step, i) => {
