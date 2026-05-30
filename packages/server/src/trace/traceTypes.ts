@@ -66,23 +66,14 @@ export interface TraceError {
   type: string;
 }
 
-/** Trace 步骤（联合类型） */
-export type TraceStep = {
+/** Trace 步骤（统一结构，业务字段全部在 data 中） */
+export interface TraceStep {
   id: string;
   type: TraceStepType;
   timestamp: string;
   round: number;
-} & (
-  | { type: "user_message"; content: string }
-  | { type: "tools_list"; servers: string[]; tools: TraceToolInfo[] }
-  | { type: "llm_request"; data: TraceLLMRequest }
-  | { type: "llm_tool_decision"; data: TraceToolDecision }
-  | { type: "mcp_tool_call"; data: TraceToolCall }
-  | { type: "mcp_tool_result"; data: TraceToolResult }
-  | { type: "final_llm_request"; data: TraceLLMRequest }
-  | { type: "final_answer"; content: string }
-  | { type: "error"; data: TraceError }
-);
+  data: Record<string, unknown>;
+}
 
 /** 完整 Trace 记录 */
 export interface Trace {

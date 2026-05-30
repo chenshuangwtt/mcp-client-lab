@@ -98,12 +98,12 @@ export function createChatRouter(manager: MCPClientManager): Router {
       addLogs(context.reqDir, { serverName, toolName, result, durationMs }, logType.ToolCallResponse, round);
 
       const toolCallStep = context.recorder.currentTrace.steps.find(
-        (s) => s.type === "mcp_tool_call" && !(s as any).data?.endedAt
+        (s) => s.type === "mcp_tool_call" && !s.data?.endedAt
       );
-      if (toolCallStep && "data" in toolCallStep) {
-        (toolCallStep as any).data.endedAt = endedAt;
-        (toolCallStep as any).data.durationMs = durationMs;
-        (toolCallStep as any).data.serverName = serverName;
+      if (toolCallStep) {
+        toolCallStep.data.endedAt = endedAt;
+        toolCallStep.data.durationMs = durationMs;
+        toolCallStep.data.serverName = serverName;
       }
 
       context.recorder.recordToolResult(serverName, toolName, result);
@@ -306,9 +306,9 @@ export function createChatRouter(manager: MCPClientManager): Router {
       // 1. 记录用户消息
       recorder.recordUserMessage(userMessage);
 
-      // 2. 获取工具列表
-      const namespacedTools = manager.getAllNamespacedTools();
-      const servers = manager.getAllServerInfo().map((s) => s.name);
+      // 2. 获取工具列表（按 serverNames 过滤）
+      const namespacedTools = manager.getNamespacedToolsByServers(body.serverNames);
+      const servers = [...new Set(namespacedTools.map((t) => t.serverName))];
       recorder.recordToolsList(servers, namespacedTools.map((t) => ({
         displayName: t.displayName,
         serverName: t.serverName,
@@ -351,6 +351,28 @@ export function createChatRouter(manager: MCPClientManager): Router {
         error: errMsg,
       });
     }
+  });
+
+  // POST /api/chat/cancel-confirmation — 取消危险工具确认
+  router.post("/cancel-confirmation", async (req, res) => {
+    const { traceId } = req.body as { traceId?: string };
+    if (!traceId) {
+      res.status(400).json({ error: "缺少 traceId" });
+      return;
+    }
+
+    const pending = pendingConfirmations.get(traceId);
+    if (!pending) {
+      res.status(404).json({ error: "待确认的工具调用不存在或已过期" });
+      return;
+    }
+
+    pending.recorder.recordError("llm_tool_decision", "用户取消危险工具调用", "UserCancelled");
+    pending.recorder.finish("error");
+    pendingConfirmations.delete(traceId);
+    logger.info("confirmation_cancelled", { traceId });
+
+    res.json({ success: true, traceId });
   });
 
   return router;

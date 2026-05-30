@@ -3,7 +3,7 @@ import { MCPClientManager } from "../mcp/mcpClientManager.js";
 import { loadServersConfig } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 
-export function createServersRouter(manager: MCPClientManager): Router {
+export function createServersRouter(manager: MCPClientManager, getActiveConfigPath?: () => string | undefined): Router {
   const router = Router();
 
   // GET /api/servers — 获取所有服务器状态
@@ -15,7 +15,7 @@ export function createServersRouter(manager: MCPClientManager): Router {
   // POST /api/servers/reload — 从 mcp-servers.json 重新加载配置
   router.post("/reload", async (_req, res) => {
     try {
-      const config = await loadServersConfig();
+      const config = await loadServersConfig(getActiveConfigPath?.());
 
       for (const name of manager.getServerNames()) {
         await manager.disconnect(name).catch(() => {});

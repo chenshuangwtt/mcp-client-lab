@@ -9,11 +9,15 @@ export interface StreamableHttpConfig {
 }
 
 /**
- * 基于 fetch 的 Streamable HTTP Transport 实现
+ * 基于 fetch 的 Streamable HTTP Transport 实现（教学版最小实现）
  *
  * MCP Streamable HTTP 规范：
  * - POST /mcp 发送 JSON-RPC 请求，接收 JSON-RPC 响应
  * - GET /sse 可选的 SSE 流（用于服务器推送通知）
+ *
+ * ⚠️ 当前为教学版最小实现，适合 Demo 和学习。
+ * 不保证覆盖完整 MCP Streamable HTTP 协议（如 resumability、event store 等）。
+ * 生产环境建议使用 MCP SDK 官方 Transport。
  */
 class StreamableHTTPTransport implements Transport {
   private url: string;

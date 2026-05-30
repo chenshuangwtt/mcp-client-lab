@@ -17,8 +17,7 @@
     "build:server": "pnpm --filter @mcp-client-lab/server build",
     "build:web": "pnpm --filter @mcp-client-lab/web build",
     "build": "pnpm build:server && pnpm build:web",
-    "start": "pnpm --filter @mcp-client-lab/server start",
-    "cli": "node packages/server/build/index.js"
+    "start": "pnpm --filter @mcp-client-lab/server start"
   },
   "keywords": [
     "mcp",

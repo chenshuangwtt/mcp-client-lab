@@ -20,21 +20,6 @@ declare module "@modelcontextprotocol/sdk/client/stdio.js" {
   }
 }
 
-// 为 readline/promises 提供类型声明
-declare module "readline/promises" {
-  import { ReadStream, WriteStream } from "fs";
-  
-  interface Interface {
-    question(query: string): Promise<string>;
-    close(): void;
-  }
-  
-  export function createInterface(options: {
-    input: ReadStream;
-    output: WriteStream;
-  }): Interface;
-}
-
 // 为 dotenv 提供类型声明
 declare module "dotenv" {
   export function config(): void;

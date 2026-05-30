@@ -18,7 +18,9 @@
 |-----------|------|----------|
 | **stdio** | 通过 stdin/stdout 启动本地子进程 | 本地 MCP Server |
 | **SSE** | 连接远程 SSE 端点 (`http://host:port/sse`) | 远程 MCP Server |
-| **Streamable HTTP** | 新版 HTTP MCP 协议 (`http://host:port/mcp`) | 新版 MCP Server |
+| **Streamable HTTP** | HTTP POST JSON-RPC (`http://host:port/mcp`) | 新版 MCP Server |
+
+> ⚠️ Streamable HTTP Transport 为教学版最小实现，适合 Demo 和学习，不保证覆盖完整协议（如 resumability）。生产环境建议使用 MCP SDK 官方 Transport。
 
 ## 快速开始
 
@@ -46,17 +48,7 @@ cp .env.example .env
     "filesystem": {
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "D:\\download"]
-    },
-    "demo-sse": {
-      "transport": "sse",
-      "url": "http://localhost:8000/sse",
-      "description": "本地 SSE Demo Server（文本/交互类）"
-    },
-    "demo-http": {
-      "transport": "streamable-http",
-      "url": "http://localhost:8001/mcp",
-      "description": "本地 Streamable HTTP Demo Server（数字/计算类）"
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
     }
   },
   "defaultServer": "filesystem"
@@ -81,21 +73,31 @@ pnpm dev
 也可以单独启动：
 
 ```bash
-pnpm dev:server      # 仅后端
-pnpm dev:web         # 仅前端
-pnpm dev:sse-demo    # 仅 SSE Demo
-pnpm dev:http-demo   # 仅 HTTP Demo
+pnpm dev:server                        # 仅后端（默认配置）
+pnpm dev:server -- --config ./custom.json  # 仅后端（指定配置）
+pnpm dev:web                           # 仅前端
+pnpm dev:sse-demo                      # 仅 SSE Demo
+pnpm dev:http-demo                     # 仅 HTTP Demo
 ```
+
+## 启动模式
+
+```bash
+pnpm dev:server
+pnpm dev:server -- --config ./custom.json
+```
+
+`--config` 可指定 `mcp-servers.json` 路径，Servers 页面的「重载配置」会使用启动时传入的路径。
 
 ## Web UI
 
 浏览器打开 `http://localhost:5173`：
 
 - **Chat** — 输入问题，观察工具调用链路，支持 Markdown 渲染
+  - 左侧可勾选本次参与对话的 MCP Server，只把选中 Server 的工具交给 LLM
+  - 危险工具触发确认：确认后继续执行，取消后 Trace 立即记录 UserCancelled
 - **Servers** — 查看连接状态、工具列表，重载配置
-- **Traces** — 查看每次请求的完整时间线，按轮次分组
-
-编辑 `mcp-servers.json` 后，在 Servers 页面点「重载配置」即可生效。
+- **Traces** — 查看每次请求的完整时间线，按轮次分组，支持删除
 
 ## 内置 Demo Server 工具
 
@@ -112,9 +114,9 @@ pnpm dev:http-demo   # 仅 HTTP Demo
 ## 一次工具调用的完整流程
 
 ```text
-用户输入: "帮我列出 D:\download 的文件夹"
+用户输入: "帮我列出 /tmp 的文件夹"
     ↓
-① 从所有已连接 Server 获取 tools/list
+① 从选中的已连接 Server 获取 tools/list
     ↓
 ② 将用户问题 + 工具列表发给 LLM
     ↓
@@ -135,6 +137,18 @@ pnpm dev:http-demo   # 仅 HTTP Demo
 
 每一步都记录在 Trace 中，可在 Trace 页面展开查看详情。
 
+## 危险工具确认
+
+工具名包含危险关键词时触发确认：
+
+- `delete`, `remove`, `write`, `update`
+- `send`, `execute`, `shell`, `sql`
+
+行为：
+
+- **确认**：继续执行工具，完成回答
+- **取消**：后端 Trace 立即结束并记录 `UserCancelled`，前端显示「🚫 用户已取消」
+
 ## 日志
 
 每次请求生成一个独立文件夹，日志和 Trace 放在一起：
@@ -150,14 +164,19 @@ logs/
     4-LLM Response-r1.json   ← r1 = 第 2 轮
 ```
 
-## 安全机制
+## Trace 数据结构
 
-工具名包含危险关键词时触发确认：
+所有 Trace 步骤的业务字段统一在 `data` 中：
 
-- `delete`, `remove`, `write`, `update`
-- `send`, `execute`, `shell`, `sql`
-
-Web 模式下返回 `need_confirmation`，用户点击确认后才执行。
+```json
+{
+  "id": "user_message-0",
+  "type": "user_message",
+  "timestamp": "...",
+  "round": 0,
+  "data": { "content": "用户的问题" }
+}
+```
 
 ## 工具命名
 
@@ -167,6 +186,18 @@ Web 模式下返回 `need_confirmation`，用户点击确认后才执行。
 |-------------------|---------|
 | `filesystem__list_directory` | `list_directory` |
 | `demo-sse__echo` | `echo` |
+
+## 安全配置
+
+可选环境变量（在 `.env` 中设置）：
+
+| 变量 | 说明 |
+|------|------|
+| `WEB_ORIGIN` | CORS 允许的来源，不设置则允许所有 |
+| `LAB_TOKEN` | API 访问令牌，设置后危险接口需要 `Authorization: Bearer <token>` |
+| `VITE_LAB_TOKEN` | 前端令牌，配合 `LAB_TOKEN` 使用，前端自动携带 |
+
+需要 Token 验证的接口：`POST /api/chat`、`POST /api/servers/reload`、`POST /api/servers/:name/connect|disconnect|tools/refresh`、`DELETE /api/traces/:traceId`
 
 ## 项目结构
 
@@ -197,12 +228,13 @@ mcp-client-lab/
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/servers | 获取所有 Server 状态 |
-| POST | /api/servers/reload | 从 `mcp-servers.json` 重载配置 |
+| POST | /api/servers/reload | 从配置文件重载 |
 | POST | /api/servers/:name/connect | 连接 Server |
 | POST | /api/servers/:name/disconnect | 断开 Server |
 | POST | /api/servers/:name/tools/refresh | 刷新工具列表 |
 | GET | /api/tools | 获取所有 namespace 后的工具 |
 | POST | /api/chat | 发送消息（支持多轮工具调用） |
+| POST | /api/chat/cancel-confirmation | 取消危险工具确认 |
 | GET | /api/traces | 历史 Trace 列表 |
 | GET | /api/traces/:traceId | 某次完整 Trace |
 | DELETE | /api/traces/:traceId | 删除指定 Trace |

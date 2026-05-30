@@ -22,6 +22,10 @@ export class StdioMCPClient implements MCPClientInstance {
   }
 
   async connect(): Promise<void> {
+    // 先关闭已有连接
+    await this.disconnect().catch(() => {});
+    // 重建 Client（避免复用已 close 的 Client）
+    this.client = new Client({ name: `mcp-lab-${this.name}`, version: "0.1.0" });
     this.transport = new StdioClientTransport({
       command: this.config.command,
       args: this.config.args,
@@ -41,6 +45,7 @@ export class StdioMCPClient implements MCPClientInstance {
     } catch {
       // ignore close errors
     }
+    this.transport = null;
   }
 
   async listTools(): Promise<MCPToolDef[]> {

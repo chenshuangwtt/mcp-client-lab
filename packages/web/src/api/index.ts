@@ -1,8 +1,14 @@
 const BASE = "/api";
 
+const LAB_TOKEN = import.meta.env.VITE_LAB_TOKEN as string | undefined;
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(LAB_TOKEN ? { Authorization: `Bearer ${LAB_TOKEN}` } : {}),
+  };
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers,
     ...options,
   });
   if (!res.ok) {
@@ -61,10 +67,15 @@ export const api = {
   getTools: () => request<{ tools: NamespacedTool[] }>("/tools"),
 
   // Chat
-  sendMessage: (message: string, confirmTool?: { traceId: string; toolName: string; arguments: Record<string, unknown> }) =>
+  sendMessage: (message: string, confirmTool?: { traceId: string; toolName: string; arguments: Record<string, unknown> }, serverNames?: string[]) =>
     request<ChatResponse>("/chat", {
       method: "POST",
-      body: JSON.stringify({ message, confirmTool }),
+      body: JSON.stringify({ message, confirmTool, serverNames }),
+    }),
+  cancelConfirmation: (traceId: string) =>
+    request<{ success: boolean; traceId: string }>("/chat/cancel-confirmation", {
+      method: "POST",
+      body: JSON.stringify({ traceId }),
     }),
 
   // Traces

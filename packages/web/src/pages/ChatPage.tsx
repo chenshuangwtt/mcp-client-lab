@@ -59,14 +59,25 @@ export default function ChatPage() {
   const [currentTraceId, setCurrentTraceId] = useState<string | null>(null);
   const [currentSteps, setCurrentSteps] = useState<string[]>([]);
   const [confirmInfo, setConfirmInfo] = useState<{ traceId: string; toolName: string; arguments: Record<string, unknown> } | null>(null);
+  const [selectedServers, setSelectedServers] = useState<Set<string>>(new Set());
   const messagesEnd = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { api.getServers().then((r) => setServers(r.servers)).catch(() => {}); }, []);
+  useEffect(() => {
+    api.getServers().then((r) => {
+      setServers(r.servers);
+      // 首次加载时自动选中已连接的 server
+      setSelectedServers((prev) => {
+        if (prev.size > 0) return prev;
+        return new Set(r.servers.filter((s) => s.state === "connected").map((s) => s.name));
+      });
+    }).catch(() => {});
+  }, []);
   useEffect(() => { messagesEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => { saveMessages(messages); }, [messages]);
 
   const connectedServers = servers.filter((s) => s.state === "connected");
-  const totalTools = connectedServers.reduce((sum, s) => sum + s.tools.length, 0);
+  const selectedServerList = servers.filter((s) => selectedServers.has(s.name) && s.state === "connected");
+  const selectedTools = selectedServerList.reduce((sum, s) => sum + s.tools.length, 0);
 
   async function handleSend(confirm?: { traceId: string; toolName: string; arguments: Record<string, unknown> }) {
     if (!input.trim() && !confirm) return;
@@ -81,7 +92,8 @@ export default function ChatPage() {
     setCurrentSteps(["thinking"]);
 
     try {
-      const res = await api.sendMessage(userMsg, confirm);
+      const serverNames = confirm ? undefined : Array.from(selectedServers);
+      const res = await api.sendMessage(userMsg, confirm, serverNames);
       setCurrentTraceId(res.traceId);
 
       if (res.status === "need_confirmation" && res.toolName) {
@@ -110,13 +122,16 @@ export default function ChatPage() {
     }
   }
 
-  function handleConfirm(yes: boolean) {
+  async function handleConfirm(yes: boolean) {
     if (yes && confirmInfo) {
       handleSend(confirmInfo);
-    } else {
+    } else if (confirmInfo) {
+      try {
+        await api.cancelConfirmation(confirmInfo.traceId);
+      } catch { /* 忽略取消失败 */ }
       setConfirmInfo(null);
-      setMessages((prev) => [...prev, { role: "assistant", content: "已取消危险工具调用。" }]);
-      setCurrentSteps([]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "🚫 已取消危险工具调用。" }]);
+      setCurrentSteps(["cancelled"]);
     }
   }
 
@@ -126,15 +141,29 @@ export default function ChatPage() {
       <div className="bg-card border border-border rounded-xl p-4 overflow-y-auto">
         <div className="text-xs font-semibold text-text-dim uppercase tracking-wide mb-3">MCP Servers</div>
         {servers.map((s) => (
-          <div key={s.name} className="flex items-center gap-2 p-2 rounded-md text-sm hover:bg-hover transition-colors">
+          <div key={s.name} className={`flex items-center gap-2 p-2 rounded-md text-sm transition-colors ${s.state === "connected" ? "hover:bg-hover cursor-pointer" : "opacity-50"}`}>
+            <input
+              type="checkbox"
+              checked={selectedServers.has(s.name)}
+              disabled={s.state !== "connected"}
+              onChange={() => {
+                setSelectedServers((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(s.name)) next.delete(s.name);
+                  else next.add(s.name);
+                  return next;
+                });
+              }}
+              className="accent-accent cursor-pointer"
+            />
             <span className={`dot ${s.state}`} />
-            <span>{s.name}</span>
-            <span className="text-xs text-text-dim ml-auto">{s.tools.length} tools</span>
+            <span className="flex-1 truncate">{s.name}</span>
+            <span className="text-xs text-text-dim">{s.tools.length}</span>
           </div>
         ))}
         <div className="mt-3 pt-3 border-t border-border">
-          <div className="text-xs font-semibold text-text-dim uppercase tracking-wide mb-1">可用工具</div>
-          <div className="text-sm text-accent font-semibold">{totalTools} 个工具</div>
+          <div className="text-xs font-semibold text-text-dim uppercase tracking-wide mb-1">已选工具</div>
+          <div className="text-sm text-accent font-semibold">{selectedTools} / {connectedServers.reduce((sum, s) => sum + s.tools.length, 0)} 个工具</div>
         </div>
       </div>
 
@@ -267,6 +296,8 @@ export default function ChatPage() {
                 ? "text-success border-success"
                 : step === "error"
                 ? "text-danger border-danger"
+                : step === "cancelled"
+                ? "text-warning border-warning"
                 : step === "waiting_confirmation"
                 ? "text-accent border-accent"
                 : "text-text-dim border-border"
@@ -280,10 +311,11 @@ export default function ChatPage() {
             {step === "final_llm" && "🔄 回传 LLM 生成最终回答"}
             {step === "done" && "✅ 完成"}
             {step === "error" && "❌ 出错"}
+            {step === "cancelled" && "🚫 用户已取消"}
             {step === "waiting_confirmation" && "⚠️ 等待确认"}
           </div>
         ))}
-        {currentTraceId && currentSteps.includes("done") && (
+        {currentTraceId && (currentSteps.includes("done") || currentSteps.includes("cancelled") || currentSteps.includes("error")) && (
           <Link
             to={`/traces/${currentTraceId}`}
             className="block mt-2 px-3 py-1.5 bg-accent text-white rounded-md text-xs text-center no-underline"

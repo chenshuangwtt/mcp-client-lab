@@ -24,9 +24,9 @@ function stepTitle(type: string): string {
 function StepBody({ step }: { step: any }) {
   const [expanded, setExpanded] = useState(false);
 
+  // 兼容新旧格式：新格式 step.data 存业务字段，旧格式直接在 step 上
+  const d: Record<string, unknown> = step.data ?? step;
   const isError = step.type === "error";
-  const isUserMsg = step.type === "user_message";
-  const isFinalAnswer = step.type === "final_answer";
 
   return (
     <div className={`timeline-step ${isError ? "error" : "active"}`} onClick={() => setExpanded(!expanded)}>
@@ -38,52 +38,52 @@ function StepBody({ step }: { step: any }) {
       </div>
       {expanded && (
         <div className="mt-2 text-sm bg-bg p-3 rounded-md overflow-x-auto">
-          {isUserMsg && <p>{step.content}</p>}
+          {step.type === "user_message" && <p>{d.content as string}</p>}
 
-          {step.type === "tools_list" && step.servers && (
+          {step.type === "tools_list" && Array.isArray(d.servers) && (
             <div>
-              <p>Servers: {step.servers.join(", ")}</p>
-              {step.tools && (
-                <pre className="text-xs">{JSON.stringify(step.tools.map((t: any) => ({ displayName: t.displayName, description: t.description })), null, 2)}</pre>
+              <p>Servers: {(d.servers as string[]).join(", ")}</p>
+              {Array.isArray(d.tools) && (
+                <pre className="text-xs">{JSON.stringify((d.tools as any[]).map((t) => ({ displayName: t.displayName, description: t.description })), null, 2)}</pre>
               )}
             </div>
           )}
 
-          {step.type === "llm_request" && step.data && (
-            <pre className="text-xs">{JSON.stringify(step.data, null, 2)}</pre>
+          {step.type === "llm_request" && (
+            <pre className="text-xs">{JSON.stringify(d, null, 2)}</pre>
           )}
 
-          {step.type === "llm_tool_decision" && step.data && (
-            <pre className="text-xs">{JSON.stringify(step.data, null, 2)}</pre>
+          {step.type === "llm_tool_decision" && (
+            <pre className="text-xs">{JSON.stringify(d, null, 2)}</pre>
           )}
 
-          {step.type === "mcp_tool_call" && step.data && (
+          {step.type === "mcp_tool_call" && (
             <div>
-              <p>Server: <code className="text-accent">{step.data.serverName || "N/A"}</code></p>
-              <p>Tool: <code className="text-accent">{step.data.toolName}</code></p>
-              <p>耗时: {step.data.durationMs}ms</p>
-              <pre className="text-xs">参数: {JSON.stringify(step.data.arguments, null, 2)}</pre>
+              <p>Server: <code className="text-accent">{(d.serverName as string) || "N/A"}</code></p>
+              <p>Tool: <code className="text-accent">{d.toolName as string}</code></p>
+              <p>耗时: {d.durationMs as number}ms</p>
+              <pre className="text-xs">参数: {JSON.stringify(d.arguments, null, 2)}</pre>
             </div>
           )}
 
-          {step.type === "mcp_tool_result" && step.data && (
+          {step.type === "mcp_tool_result" && (
             <div>
-              <p>{step.data.truncated ? "⚠️ 结果已截断" : "完整结果"}</p>
-              <pre className="text-xs">{typeof step.data.result === "string" ? step.data.result : JSON.stringify(step.data.result, null, 2)}</pre>
+              <p>{d.truncated ? "⚠️ 结果已截断" : "完整结果"}</p>
+              <pre className="text-xs">{typeof d.result === "string" ? d.result : JSON.stringify(d.result, null, 2)}</pre>
             </div>
           )}
 
-          {step.type === "final_llm_request" && step.data && (
-            <pre className="text-xs">{JSON.stringify(step.data, null, 2)}</pre>
+          {step.type === "final_llm_request" && (
+            <pre className="text-xs">{JSON.stringify(d, null, 2)}</pre>
           )}
 
-          {isFinalAnswer && <pre className="text-xs whitespace-pre-wrap">{step.content}</pre>}
+          {step.type === "final_answer" && <pre className="text-xs whitespace-pre-wrap">{d.content as string}</pre>}
 
-          {step.type === "error" && step.data && (
+          {step.type === "error" && (
             <div className="text-danger">
-              <p><strong>{step.data.type}</strong></p>
-              <p>{step.data.message}</p>
-              <p>发生在步骤: {step.data.step}</p>
+              <p><strong>{d.type as string}</strong></p>
+              <p>{d.message as string}</p>
+              <p>发生在步骤: {d.step as string}</p>
             </div>
           )}
         </div>

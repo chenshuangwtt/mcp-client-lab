@@ -42,8 +42,8 @@ export class TraceRecorder {
       type,
       timestamp: new Date().toISOString(),
       round: this.currentRound,
-      ...data,
-    } as TraceStep;
+      data,
+    };
     this.trace.steps.push(step);
     return step;
   }
@@ -55,35 +55,31 @@ export class TraceRecorder {
 
   /** 记录用户消息 */
   recordUserMessage(content: string): void {
-    this.addStep("user_message", { content } as Record<string, unknown>);
+    this.addStep("user_message", { content });
     this.persist();
   }
 
   /** 记录 tools/list 结果 */
   recordToolsList(servers: string[], tools: TraceToolInfo[]): void {
-    this.addStep("tools_list", { servers, tools } as Record<string, unknown>);
+    this.addStep("tools_list", { servers, tools });
     this.persist();
   }
 
   /** 记录 LLM 请求 */
   recordLLMRequest(model: string, messageCount: number, toolCount: number, hasToolCall: boolean): void {
-    this.addStep("llm_request", {
-      data: { model, messageCount, toolCount, hasToolCall },
-    } as Record<string, unknown>);
+    this.addStep("llm_request", { model, messageCount, toolCount, hasToolCall });
     this.persist();
   }
 
   /** 记录 LLM 工具决策 */
   recordToolDecision(invoked: boolean, toolName?: string, args?: Record<string, unknown>, reasoning?: string): void {
-    this.addStep("llm_tool_decision", {
-      data: { invoked, toolName, arguments: args, reasoning },
-    } as Record<string, unknown>);
+    this.addStep("llm_tool_decision", { invoked, toolName, arguments: args, reasoning });
     this.persist();
   }
 
   /** 记录 MCP 工具调用 */
   recordToolCall(data: TraceToolCall): void {
-    this.addStep("mcp_tool_call", { data } as Record<string, unknown>);
+    this.addStep("mcp_tool_call", { ...data });
     this.persist();
   }
 
@@ -104,37 +100,26 @@ export class TraceRecorder {
       parsed = resultStr;
     }
 
-    const data: TraceToolResult = {
-      serverName,
-      toolName,
-      result: parsed,
-      truncated,
-    };
-
-    this.addStep("mcp_tool_result", { data } as Record<string, unknown>);
+    this.addStep("mcp_tool_result", { serverName, toolName, result: parsed, truncated });
     this.persist();
   }
 
   /** 记录最终 LLM 请求 */
   recordFinalLLMRequest(model: string, messageCount: number, toolCount: number): void {
-    this.addStep("final_llm_request", {
-      data: { model, messageCount, toolCount, hasToolCall: false },
-    } as Record<string, unknown>);
+    this.addStep("final_llm_request", { model, messageCount, toolCount, hasToolCall: false });
     this.persist();
   }
 
   /** 记录最终回答 */
   recordFinalAnswer(content: string): void {
-    this.addStep("final_answer", { content } as Record<string, unknown>);
+    this.addStep("final_answer", { content });
     this.trace.finalAnswer = content;
     this.persist();
   }
 
   /** 记录错误 */
   recordError(step: string, message: string, type: string): void {
-    this.addStep("error", {
-      data: { step, message, type },
-    } as Record<string, unknown>);
+    this.addStep("error", { step, message, type });
     this.persist();
   }
 

@@ -133,6 +133,17 @@ export class MCPClientManager {
     return this.toolMapper.getAllTools();
   }
 
+  /** 获取指定 server 的工具（过滤 disconnected/error 的 server） */
+  getNamespacedToolsByServers(serverNames?: string[]): NamespacedTool[] {
+    const allTools = this.toolMapper.getAllTools();
+    if (!serverNames || serverNames.length === 0) {
+      // 只返回已连接 server 的工具
+      return allTools.filter((t) => this.states.get(t.serverName) === "connected");
+    }
+    const nameSet = new Set(serverNames);
+    return allTools.filter((t) => nameSet.has(t.serverName) && this.states.get(t.serverName) === "connected");
+  }
+
   /** 根据 displayName 解析并调用工具 */
   async callTool(displayName: string, args: unknown): Promise<{ serverName: string; result: unknown }> {
     const parsed = this.toolMapper.parseDisplayName(displayName);
