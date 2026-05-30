@@ -161,7 +161,9 @@ export default function ChatPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs font-semibold text-text-dim uppercase tracking-wide">MCP Servers</div>
           <button
-            onClick={() => refreshServers().catch(() => {})}
+            onClick={() => refreshServers().catch((err) => {
+              setMessages((prev) => [...prev, { role: "error", content: `刷新失败: ${err instanceof Error ? err.message : String(err)}` }]);
+            })}
             className="text-xs text-text-dim hover:text-accent cursor-pointer px-1"
             title="刷新状态"
           >

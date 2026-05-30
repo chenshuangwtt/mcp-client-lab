@@ -33,6 +33,8 @@ function generateSequenceDiagram(trace: TraceData): string {
   const lines: string[] = [
     "sequenceDiagram",
     "    participant U as User",
+    "    participant W as Web UI",
+    "    participant B as Backend",
     "    participant L as LLM",
     "    participant M as MCP Server",
   ];
@@ -49,21 +51,33 @@ function generateSequenceDiagram(trace: TraceData): string {
 
     switch (step.type) {
       case "user_message":
-        lines.push(`    U->>L: ${String(s.content).slice(0, 50).replace(/[\n\r]/g, " ")}`);
+        lines.push(`    U->>W: ${String(s.content).slice(0, 50).replace(/[\n\r]/g, " ")}`);
+        lines.push(`    W->>B: POST /api/chat`);
+        break;
+      case "tools_list":
+        lines.push(`    B->>B: tools/list`);
+        break;
+      case "llm_request":
+        lines.push(`    B->>L: chat/completions`);
         break;
       case "llm_tool_decision":
         if (s.invoked) {
-          lines.push(`    L->>L: 决策调用 ${s.toolName}`);
+          lines.push(`    L-->>B: tool_calls: ${s.toolName}`);
         }
         break;
       case "mcp_tool_call":
-        lines.push(`    L->>M: ${s.toolName}()`);
+        lines.push(`    B->>M: ${s.toolName}()`);
         break;
       case "mcp_tool_result":
-        lines.push(`    M-->>L: 返回结果`);
+        lines.push(`    M-->>B: 返回结果`);
+        break;
+      case "final_llm_request":
+        lines.push(`    B->>L: chat/completions`);
         break;
       case "final_answer":
-        lines.push(`    L-->>U: ${String(s.content).slice(0, 50).replace(/[\n\r]/g, " ")}`);
+        lines.push(`    L-->>B: 最终回答`);
+        lines.push(`    B-->>W: JSON`);
+        lines.push(`    W-->>U: ${String(s.content).slice(0, 50).replace(/[\n\r]/g, " ")}`);
         break;
       case "error":
         lines.push(`    Note over U,M: Error - ${String(s.message).slice(0, 40).replace(/[\n\r]/g, " ")}`);

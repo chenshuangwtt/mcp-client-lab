@@ -96,16 +96,7 @@ export function createChatRouter(manager: MCPClientManager): Router {
       const durationMs = new Date(endedAt).getTime() - new Date(startedAt).getTime();
 
       addLogs(context.reqDir, { serverName, toolName, result, durationMs }, logType.ToolCallResponse, round);
-
-      const toolCallStep = context.recorder.currentTrace.steps.find(
-        (s) => s.type === "mcp_tool_call" && !s.data?.endedAt
-      );
-      if (toolCallStep) {
-        toolCallStep.data.endedAt = endedAt;
-        toolCallStep.data.durationMs = durationMs;
-        toolCallStep.data.serverName = serverName;
-      }
-
+      context.recorder.updateLatestToolCall({ endedAt, durationMs, serverName });
       context.recorder.recordToolResult(serverName, toolName, result);
       logger.info("mcp_tool_result", { traceId: context.traceId, serverName, toolName, durationMs });
 

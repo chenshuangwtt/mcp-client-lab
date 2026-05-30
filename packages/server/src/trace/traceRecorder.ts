@@ -83,6 +83,18 @@ export class TraceRecorder {
     this.persist();
   }
 
+  /** 更新最近一次 mcp_tool_call 步骤（工具执行完成后补全耗时等信息） */
+  updateLatestToolCall(patch: { endedAt: string; durationMs: number; serverName: string }): void {
+    for (let i = this.trace.steps.length - 1; i >= 0; i--) {
+      const step = this.trace.steps[i];
+      if (step.type === "mcp_tool_call" && !step.data.endedAt) {
+        Object.assign(step.data, patch);
+        this.persist();
+        return;
+      }
+    }
+  }
+
   /** 记录 MCP 工具结果 */
   recordToolResult(serverName: string, toolName: string, result: unknown): void {
     let truncated = false;
